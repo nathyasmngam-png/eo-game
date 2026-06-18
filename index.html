@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เกมต่อคำศัพท์ไอทีภาษาไทย (1 VS 1)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background: #0f172a;
+            color: #f8fafc;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        input,
+        button {
+            padding: 12px;
+            margin: 8px;
+            border-radius: 6px;
+            border: none;
+            font-size: 16px;
+        }
+
+        input {
+            background: #334155;
+            color: white;
+            width: 60%;
+        }
+
+        button {
+            background: #10b981;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #059669;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #word-history {
+            height: 200px;
+            overflow-y: auto;
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: left;
+            margin: 15px 0;
+            border: 1px solid #475569;
+        }
+
+        .status-box {
+            background: #1e293b;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 5px solid #3b82f6;
+        }
+
+        #timer {
+            font-size: 36px;
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .badge {
+            background: #3b82f6;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>💻 เกมต่อคำศัพท์คอมพิวเตอร์ (ภาษาไทย)</h1>
+        <p>กติกา: พิมพ์คำศัพท์ไอทีหรือคอมพิวเตอร์เป็นภาษาไทย โดยพยัญชนะตัวแรกต้องตรงกับตัวสะกดสุดท้ายของคำก่อนหน้า!</p>
+        <div style="background:#334155; padding: 10px; border-radius: 8px; font-size:14px; text-align:left;">
+            💡 <b>ตัวอย่าง:</b> คอมพิว<b>เ</b>ตอ<b>ร์</b> (ลงท้ายตัว ร) ➡️ <b>ร้</b>า<b>น</b>เน็ต (ลงท้ายตัว น) ➡️ <b>น็</b>อ<b>ต</b> (ลงท้ายตัว ต)
+        </div>
+        <hr style="border-color: #334155; margin-top: 15px;">
+
+        <div id="lobby-screen">
+            <h3>เข้าสู่ระบบ</h3>
+            <input type="text" id="username" placeholder="ใส่ชื่อเท่ๆ ของคุณ"><br>
+            <input type="text" id="room-input" placeholder="ใส่รหัสห้อง (เช่น ROOM99)"><br>
+            <button onclick="joinRoom()">เข้าห้อง / สร้างห้อง</button>
+        </div>
+
+        <div id="waiting-screen" class="hidden">
+            <h3>รหัสห้อง: <span id="display-room" style="color:#3b82f6;"></span></h3>
+            <p>รายชื่อคนในห้อง (<span id="player-count">0</span>/2 คน):</p>
+            <div id="player-list" style="font-weight: bold; margin-bottom: 15px;"></div>
+            <p style="color: #94a3b8;">เมื่อเพื่อนเข้ามาครบ 2 คน ระบบจะเริ่มแข่งทันที!</p>
+        </div>
+
+        <div id="game-screen" class="hidden">
+            <div class="status-box">
+                <h3 id="match-title">⚔️ ดวลเดือด 1 VS 1</h3>
+                <p id="versus-text">-</p>
+                <p>🟢 ตาของ: <span id="current-turn" style="color:#10b981; font-weight:bold;">-</span></p>
+            </div>
+
+            <div id="timer">20</div>
+
+            <h2 style="color: #eab308;">คำล่าสุด: <span id="last-word">-</span></h2>
+
+            <div id="word-history"></div>
+
+            <div id="action-area">
+                <input type="text" id="word-input" placeholder="พิมพ์คำศัพท์ไอทีภาษาไทยตรงนี้...">
+                <button onclick="submitWord()">ส่งคำศัพท์</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDQWMlGCgRPErnGQyEFZIKH2KRVbeN81_Q",
+            authDomain: "computer-word-game-8b494.firebaseapp.com",
+            projectId: "computer-word-game-8b494",
+            storageBucket: "computer-word-game-8b494.firebasestorage.app",
+            messagingSenderId: "187527876541",
+            appId: "1:187527876541:web:51cc1fdd38772456740cd4",
+            measurementId: "G-W4VLHQHCZW"
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let myName = "";
+        let currentRoomId = "";
+        let roomState = {};
+        let timerInterval = null;
+
+        // ฟังก์ชันดึงตัวอักษรสะกดตัวสุดท้าย (ไม่รวมสระและวรรณยุกต์)
+        function getLastThaiChar(word) {
+            let cleanWord = word.replace(/[ะาิีึืุูေဲောํ์่้๊๋็]/g, '');
+            return cleanWord.charAt(cleanWord.length - 1);
+        }
+
+        // ฟังก์ชันดึงพยัญชนะต้นตัวแรก (ข้ามสระหน้าถ้ามี)
+        function getFirstThaiChar(word) {
+            let cleanWord = word.replace(/^[เแโไใไ]/, '');
+            return cleanWord.charAt(0);
+        }
+
+        window.joinRoom = async () => {
+            myName = document.getElementById("username").value.trim();
+            currentRoomId = document.getElementById("room-input").value.trim().toUpperCase();
+
+            if (!myName || !currentRoomId) {
+                alert("กรุณากรอกชื่อและรหัสห้องด้วยจ้า");
+                return;
+            }
+
+            const roomRef = doc(db, "rooms", currentRoomId);
+            const roomSnap = await getDoc(roomRef);
+
+            if (!roomSnap.exists()) {
+                await setDoc(roomRef, {
+                    roomCode: currentRoomId,
+                    status: "waiting",
+                    players: [myName],
+                    currentWord: "คอมพิวเตอร์", 
+                    timer: 20
+                });
+            } else {
+                const data = roomSnap.data();
+                if (data.players.includes(myName)) {
+                } else if (data.players.length >= 2) {
+                    alert("ห้องนี้เต็มแล้วจ้า!");
+                    return;
+                } else {
+                    let updatedPlayers = [...data.players, myName];
+                    await setDoc(roomRef, { players: updatedPlayers }, { merge: true });
+
+                    if (updatedPlayers.length === 2) {
+                        await setDoc(roomRef, {
+                            status: "playing",
+                            player1: updatedPlayers[0],
+                            player2: updatedPlayers[1],
+                            currentTurn: updatedPlayers[0],
+                            timer: 20
+                        }, { merge: true });
+                        startCountdownTrigger();
+                    }
+                }
+            }
+
+            document.getElementById("lobby-screen").classList.add("hidden");
+            document.getElementById("waiting-screen").classList.remove("hidden");
+            document.getElementById("display-room").innerText = currentRoomId;
+
+            listenToRoom();
+            listenToWords();
+        };
+
+        function listenToRoom() {
+            onSnapshot(doc(db, "rooms", currentRoomId), (snapshot) => {
+                if (!snapshot.exists()) return;
+                roomState = snapshot.data();
+
+                document.getElementById("player-count").innerText = roomState.players.length;
+                document.getElementById("player-list").innerHTML = roomState.players.map(p => `<div>👤 ${p} ${p === myName ? '<span class="badge">คุณ</span>' : ''}</div>`).join('');
+
+                if (roomState.status !== "waiting") {
+                    document.getElementById("waiting-screen").classList.add("hidden");
+                    document.getElementById("game-screen").classList.remove("hidden");
+
+                    let lastW = roomState.currentWord;
+                    let lastC = getLastThaiChar(lastW);
+                    document.getElementById("last-word").innerHTML = `${lastW} (คำต่อไปขึ้นต้นด้วย: <b style="color:#ef4444; font-size:26px;">${lastC}</b>)`;
+                    
+                    document.getElementById("current-turn").innerText = roomState.currentTurn;
+                    document.getElementById("timer").innerText = roomState.timer;
+
+                    if (roomState.status === "playing") {
+                        document.getElementById("versus-text").innerText = `${roomState.player1} VS ${roomState.player2}`;
+                    } else if (roomState.status === "finished") {
+                        document.getElementById("match-title").innerText = "🎉 จบเกมแล้ว!";
+                        document.getElementById("versus-text").innerText = `🥇 ผู้ชนะคือ: ${roomState.finalWinner}`;
+                        document.getElementById("action-area").innerHTML = `<h3>🏆 แชมป์ของห้องนี้คือ ${roomState.finalWinner}!</h3>`;
+                        clearInterval(timerInterval);
+                    }
+
+                    if (roomState.currentTurn === myName && roomState.status !== "finished") {
+                        document.getElementById("word-input").disabled = false;
+                        document.getElementById("word-input").focus();
+                    } else {
+                        document.getElementById("word-input").disabled = true;
+                    }
+                }
+            });
+        }
+
+        function listenToWords() {
+            const q = query(collection(db, "rooms", currentRoomId, "words"), orderBy("time", "asc"));
+            onSnapshot(q, (snapshot) => {
+                let html = "";
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    html += `<p style="margin:5px 0;"><b>${data.player}:</b> <span style="color:#10b981;">${data.word}</span></p>`;
+                });
+                const box = document.getElementById("word-history");
+                box.innerHTML = html;
+                box.scrollTop = box.scrollHeight;
+            });
+        }
+
+        window.submitWord = async () => {
+            let inputWord = document.getElementById("word-input").value.trim();
+            if (!inputWord) return;
+
+            let lastWord = roomState.currentWord;
+            let lastChar = getLastThaiChar(lastWord);
+            let firstChar = getFirstThaiChar(inputWord);
+
+            if (lastChar !== firstChar) {
+                alert(`คำนี้ขึ้นต้นด้วยตัว "${firstChar}" ไม่ถูกจ้า! ต้องขึ้นต้นด้วยตัว "${lastChar}" (ตามตัวสะกดท้ายของคำว่า ${lastWord})`);
+                return;
+            }
+
+            let nextTurn = (roomState.currentTurn === roomState.player1) ? roomState.player2 : roomState.player1;
+
+            await addDoc(collection(db, "rooms", currentRoomId, "words"), {
+                player: myName,
+                word: inputWord,
+                time: Date.now()
+            });
+
+            await setDoc(doc(db, "rooms", currentRoomId), {
+                currentWord: inputWord,
+                currentTurn: nextTurn,
+                timer: 20
+            }, { merge: true });
+
+            document.getElementById("word-input").value = "";
+        };
+
+        function startCountdownTrigger() {
+            if (timerInterval) clearInterval(timerInterval);
+
+            timerInterval = setInterval(async () => {
+                if (roomState.players && roomState.players[0] === myName && roomState.status === "playing") {
+                    let newTimer = roomState.timer - 1;
+
+                    if (newTimer <= 0) {
+                        let loser = roomState.currentTurn;
+                        let winner = (loser === roomState.player1) ? roomState.player2 : roomState.player1;
+
+                        alert(`⏰ หมดเวลาแล้วจ้า! ${loser} คิดคำไม่ออก ยอมแพ้ไป!`);
+
+                        await setDoc(doc(db, "rooms", currentRoomId), {
+                            status: "finished",
+                            finalWinner: winner
+                        }, { merge: true });
+                    } else {
+                        await setDoc(doc(db, "rooms", currentRoomId), { timer: newTimer }, { merge: true });
+                    }
+                }
+            }, 1000);
+        }
+    </script>
+
+</body>
+
+</html>
